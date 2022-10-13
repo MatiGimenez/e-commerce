@@ -3,6 +3,7 @@ import {Context} from '../../context';
 import {Arg, Ctx, Mutation, Query, Resolver} from 'type-graphql';
 import Product from './Product.schema';
 import {ProductInput} from './Product.inputs';
+import {PrismaClientKnownRequestError} from '@prisma/client/runtime';
 
 @Resolver(Product)
 class ProductResolver {
@@ -10,11 +11,25 @@ class ProductResolver {
 
 	@Query(returns => Product)
 	async product(@Arg('id') id: string, @Ctx() ctx: Context): Promise<Product> {
-		const product = await ctx.db.product.findUnique({where: {id}});
-		if (!product) {
-			throw new Error('No se encontró producto con el id dado.');
+		let product;
+		try {
+			product = await ctx.db.product.findUniqueOrThrow({where: {id}});
+			if (!product) {
+				throw new Error('No se encontró producto con el id dado.');
+			}
+			return product;
+		} catch (e) {
+			if (e instanceof PrismaClientKnownRequestError) {
+				// The .code property can be accessed in a type-safe manner
+				console.log('e', e.code);
+				if (e.code === 'P2002') {
+					console.log(
+						'There is a unique constraint violation, a new user cannot be created with this email'
+					);
+				}
+			}
+			throw new Error(e as string);
 		}
-		return product;
 	}
 
 	@Query(returns => [Product])
